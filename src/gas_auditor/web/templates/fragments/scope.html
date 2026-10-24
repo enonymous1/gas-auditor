@@ -1,0 +1,12 @@
+{# Scope definition modal content. Expects: scope (scope_view dict). #}
+<div class="detail">
+  <h2>{{ scope.short }}</h2>
+  <p><code class="scope-url">{{ scope.url }}</code></p>
+  <p>{{ scope.definition }}</p>
+  {% if scope.sensitivity %}
+  <p><strong>Sensitivity (Google's classification):</strong> {{ scope.sensitivity }}</p>
+  {% endif %}
+  <p><a href="{{ scope.docs_url }}" target="_blank" rel="noopener">
+    Open this scope in Google's OAuth scope reference ↗</a></p>
+  <p><small>Definitions are curated summaries -- Google's reference is authoritative.</small></p>
+</div>

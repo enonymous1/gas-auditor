@@ -1,0 +1,222 @@
+<script>
+/**
+ * Dashboard client logic.
+ *
+ * Flow: Scan click -> google.script.run.startScan() (Drive discovery)
+ * -> repeated auditChunk(slice) calls, CHUNK_SIZE projects at a time,
+ * -> rows accumulate here, table renders progressively, and the CSV is
+ * generated in the browser from the same rows (column order mirrors
+ * the Python package's AUDIT_FIELDS).
+ */
+var CHUNK_SIZE = 8; // must match CONFIG.CHUNK_SIZE in Config.gs
+
+var state = { projects: [], rows: [], cursor: 0, scanning: false };
+
+var CSV_FIELDS = [
+  'project_name', 'script_id', 'drive_modified_time', 'drive_created_time',
+  'web_view_link', 'parent_id', 'creator_email', 'last_modify_user_email',
+  'project_create_time', 'project_update_time',
+  'file_count', 'file_counts_by_type', 'server_js_count', 'html_count',
+  'json_count', 'function_count', 'function_names', 'total_source_chars',
+  'oauth_scopes', 'oauth_scope_count', 'advanced_services',
+  'manifest_time_zone', 'runtime_version', 'has_webapp', 'has_execution_api',
+  'metrics_granularity', 'active_users_latest', 'total_executions',
+  'failed_executions',
+  'recent_process_count', 'process_types', 'process_statuses',
+  'failed_process_count', 'last_execution_time', 'last_execution_type',
+  'last_execution_status', 'last_execution_function',
+  'project_error', 'content_error', 'metrics_error', 'processes_error'
+];
+
+function el(id) { return document.getElementById(id); }
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function fmtTime(rfc3339) {
+  if (!rfc3339) return '—';
+  return rfc3339.replace('T', ' ').slice(0, 16);
+}
+
+/** Mirrors viewmodels.status_view in the Python web package. */
+function statusView(row) {
+  if (row.processes_error) {
+    return { kind: 'unknown', text: '⚠ unknown — processes API error' };
+  }
+  var failed = row.failed_process_count || 0;
+  var status = row.last_execution_status || '';
+  if (!status) return { kind: 'none', text: '— no recent executions' };
+  var when = fmtTime(row.last_execution_time);
+  if (status === 'FAILED' || status === 'TIMED_OUT' || failed) {
+    var extra = failed ? ' (' + failed + ' failed in sample)' : '';
+    return { kind: 'fail', text: '✗ ' + status + ' · ' + when + extra };
+  }
+  return { kind: 'ok', text: '✓ ' + status + ' · ' + when };
+}
+
+function renderTable() {
+  var rows = state.rows;
+  if (!rows.length) {
+    el('inventory-results').innerHTML =
+      '<p>No Apps Script projects found in this Drive.</p>';
+    return;
+  }
+  var html = '<table><thead><tr>' +
+    '<th>Project Name</th><th>Last Modified</th><th>File Count</th>' +
+    '<th>Scopes Requested</th><th>Recent Execution Status</th>' +
+    '</tr></thead><tbody>';
+  rows.forEach(function (r) {
+    var scopes = r.oauth_scopes || [];
+    var scopeCell = scopes.length
+      ? '<strong>' + scopes.length + '</strong><br><small>' +
+        escapeHtml(scopes.map(function (s) {
+          return s.replace('https://www.googleapis.com/auth/', '');
+        }).join('; ')) + '</small>'
+      : '—';
+    var name = escapeHtml(r.project_name || r.script_id || '(unnamed)');
+    var nameCell = r.web_view_link
+      ? '<a href="' + escapeHtml(r.web_view_link) + '" target="_blank" rel="noopener">' + name + '</a>'
+      : name;
+    var st = statusView(r);
+    html += '<tr><td>' + nameCell + '</td><td>' + escapeHtml(fmtTime(r.drive_modified_time)) +
+      '</td><td>' + (r.file_count || 0) + '</td><td>' + scopeCell +
+      '</td><td><span class="status-' + st.kind + '">' + escapeHtml(st.text) +
+      '</span></td></tr>';
+  });
+  el('inventory-results').innerHTML = html + '</tbody></table>';
+}
+
+function setProgress(text) { el('progress').textContent = text; }
+
+function finishScan() {
+  state.scanning = false;
+  el('scan-btn').disabled = false;
+  el('csv-btn').disabled = state.rows.length === 0;
+  el('ids-btn').disabled = state.rows.length === 0;
+  var errored = state.rows.filter(function (r) {
+    return r.project_error || r.content_error || r.metrics_error || r.processes_error;
+  }).length;
+  setProgress('Done: ' + state.rows.length + ' project(s) scanned' +
+    (errored ? ' · ' + errored + ' with stage errors (see CSV *_error columns)' : '') + '.');
+  renderTable();
+}
+
+function failScan(err) {
+  state.scanning = false;
+  el('scan-btn').disabled = false;
+  setProgress('✗ Scan failed: ' + (err && err.message ? err.message : err));
+}
+
+function runNextChunk() {
+  if (state.cursor >= state.projects.length) { finishScan(); return; }
+  var slice = state.projects.slice(state.cursor, state.cursor + CHUNK_SIZE);
+  setProgress('Scanning… ' + state.cursor + ' / ' + state.projects.length + ' projects');
+  google.script.run
+    .withSuccessHandler(function (rows) {
+      state.rows = state.rows.concat(rows || []);
+      state.cursor += slice.length;
+      renderTable(); // progressive: table grows chunk by chunk
+      runNextChunk();
+    })
+    .withFailureHandler(failScan)
+    .auditChunk(slice);
+}
+
+/** Seed IDs from the textarea: one per line, '#' starts a comment.
+ *  Persisted in this browser's localStorage only. */
+function parseSeedIds() {
+  return el('seed-ids').value.split('\n')
+    .map(function (line) { return line.split('#')[0].trim(); })
+    .filter(function (s) { return s.length > 0; });
+}
+
+function startScan() {
+  if (state.scanning) return;
+  state = { projects: [], rows: [], cursor: 0, scanning: true };
+  el('scan-btn').disabled = true;
+  el('csv-btn').disabled = true;
+  el('ids-btn').disabled = true;
+  el('inventory-results').innerHTML = '';
+  setProgress('Discovering Apps Script projects in Drive…');
+  google.script.run
+    .withSuccessHandler(function (result) {
+      state.projects = (result && result.projects) || [];
+      if (result && result.user) {
+        el('user-line').textContent = 'Signed in as ' + result.user;
+      }
+      if (!state.projects.length) { finishScan(); return; }
+      runNextChunk();
+    })
+    .withFailureHandler(failScan)
+    .startScan(parseSeedIds());
+}
+
+/* ---------------- client-side CSV (mirrors Python output.render_csv) ---- */
+
+function flattenForCsv(row) {
+  return CSV_FIELDS.map(function (f) {
+    var v = row[f];
+    if (Array.isArray(v)) return v.join('; ');
+    if (v && typeof v === 'object') {
+      return Object.keys(v).sort().map(function (k) { return k + '=' + v[k]; }).join('; ');
+    }
+    return v == null ? '' : String(v);
+  });
+}
+
+function csvEscape(s) {
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function downloadCsv() {
+  var lines = [CSV_FIELDS.join(',')];
+  state.rows.forEach(function (r) {
+    lines.push(flattenForCsv(r).map(csvEscape).join(','));
+  });
+  var blob = new Blob([lines.join('\r\n')], { type: 'text/csv' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'gas_audit.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ------------- script-IDs file (same format as the Python CLI) -------- */
+
+function downloadIds() {
+  var lines = [
+    '# Apps Script project IDs -- one per line; \'#\' starts a comment.',
+    '# Standalone projects are found automatically by Drive listing;',
+    '# the IDs that matter here are CONTAINER-BOUND projects (created',
+    '# from inside a Sheet/Doc/Slides/Form), which Google hides from',
+    '# Drive listing. Add a missing bound project\'s ID -- from its',
+    '# script-editor URL: script.google.com/home/projects/<ID>/edit --',
+    '# and it will be audited on every run from then on.',
+    ''
+  ];
+  state.rows.forEach(function (r) {
+    var note = '# ' + (r.project_name || '(unnamed)') +
+      (r.parent_id ? '  [bound to ' + r.parent_id + ']' : '');
+    lines.push(note, r.script_id);
+  });
+  var blob = new Blob([lines.join('\n') + '\n'], { type: 'text/plain' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'gas_script_ids.txt';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+el('scan-btn').addEventListener('click', startScan);
+el('csv-btn').addEventListener('click', downloadCsv);
+el('ids-btn').addEventListener('click', downloadIds);
+
+/* Seed textarea persistence (this browser only). */
+el('seed-ids').value = localStorage.getItem('gas-seed-ids') || '';
+el('seed-ids').addEventListener('input', function () {
+  localStorage.setItem('gas-seed-ids', el('seed-ids').value);
+});
+</script>

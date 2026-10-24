@@ -1,0 +1,55 @@
+{# Shared by the full page (project.html) and the modal fragment route.
+   Expects: detail (viewmodels.project_detail). #}
+<div class="detail">
+  <h2>{{ detail.name }}</h2>
+  <p>
+    <span class="status-{{ detail.status.kind }}">{{ detail.status.text }}</span>
+    {% if detail.drive_link %} · <a href="{{ detail.drive_link }}" target="_blank" rel="noopener">Open in Drive ↗</a>{% endif %}
+    {% if detail.editor_link %} · <a href="{{ detail.editor_link }}" target="_blank" rel="noopener">Open in script editor ↗</a>{% endif %}
+  </p>
+
+  {% for group in detail.groups %}
+  <h3>{{ group.title }}</h3>
+  {% if group.title == 'Permissions' %}
+  <dl class="detail-grid">
+    <dt>OAuth scopes</dt>
+    <dd>{% if detail.scopes %}{% with scopes = detail.scopes %}{% include "fragments/scope_chips.html" %}{% endwith %}{% else %}—{% endif %}</dd>
+  </dl>
+  {% endif %}
+  <dl class="detail-grid">
+    {% for label, value in group['items'] %}
+    <dt>{{ label }}</dt><dd>{{ value }}</dd>
+    {% endfor %}
+  </dl>
+  {% endfor %}
+
+  <h3>GitHub association</h3>
+  {% if detail.github.repo %}
+  <dl class="detail-grid">
+    <dt>Repository</dt>
+    <dd>{% if detail.github.url %}<a href="{{ detail.github.url }}" target="_blank" rel="noopener">{{ detail.github.repo }}</a>{% else %}{{ detail.github.repo }}{% endif %}</dd>
+    <dt>Match</dt>
+    <dd><span class="status-{{ detail.github.kind }}">{{ detail.github.match }}</span></dd>
+    <dt>Evidence</dt>
+    <dd>{{ detail.github.evidence }}</dd>
+  </dl>
+  <div hx-get="/api/project/{{ detail.script_id }}/readme"
+       hx-trigger="load" hx-swap="innerHTML">
+    <p><em>Loading README…</em></p>
+  </div>
+  {% elif detail.github.checked %}
+  <p>No associated repository found. Evidence: {{ detail.github.evidence }}</p>
+  {% else %}
+  <p>GitHub matching was not enabled for this scan
+     (start the dashboard with <code>--github-candidates</code>).</p>
+  {% endif %}
+
+  {% if detail.errors %}
+  <h3>Stage errors</h3>
+  <ul>
+    {% for stage, message in detail.errors %}
+    <li><strong>{{ stage }}</strong>: {{ message }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>

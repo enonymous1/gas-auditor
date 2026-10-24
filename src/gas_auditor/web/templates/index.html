@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<header>
+  <h1>Google Apps Script — Project Inventory</h1>
+  <p>Audits every Apps Script project in your Drive: files, OAuth scopes,
+     and recent executions.</p>
+</header>
+
+<button type="button"
+        hx-get="/api/scan"
+        hx-target="#inventory-results"
+        hx-swap="innerHTML"
+        hx-indicator="#scan-loading">
+  Scan Workspace
+</button>
+<div id="scan-loading" class="htmx-indicator">
+  <p>Contacting Google APIs…</p>
+</div>
+
+<p class="muted">
+  Missing container-bound projects (Sheets/Docs)? Drive listing can't see
+  them — <a href="/api/script-ids.txt">download the script-IDs file</a>
+  (generated from the last scan), add their IDs, and restart with
+  <code>--script-ids-file</code> — or just keep the IDs in the tracking
+  state once they've been scanned once.
+</p>
+
+{# Server-rendered with the last completed scan when one exists (see the
+   index route) so navigating back from a project page doesn't force a
+   re-scan; the Scan button above still starts a fresh one. #}
+<div id="inventory-results">{{ initial_results | safe }}</div>
+{% endblock %}

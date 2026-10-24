@@ -1,0 +1,6 @@
+{# Clickable scope chips: each opens the scope definition in the shared
+   modal (base.html) via /api/scope. Expects: scopes (scope_view dicts). #}
+{% for s in scopes %}<button type="button" class="scope-chip"
+        hx-get="/api/scope?u={{ s.url | urlencode }}"
+        hx-target="#modal-body" hx-swap="innerHTML"
+        onclick="showModal()">{{ s.short }}</button> {% endfor %}

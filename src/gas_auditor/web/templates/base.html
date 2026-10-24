@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}GAS Auditor — Inventory Dashboard{% endblock %}</title>
+  {# Apply the stored theme before first paint (no flash); absent a stored
+     choice, the CSS follows the OS via prefers-color-scheme. #}
+  <script>
+    (function () {
+      var t = localStorage.getItem('gas-theme');
+      if (t) document.documentElement.dataset.theme = t;
+    })();
+  </script>
+  {# HTMX from CDN: the dashboard needs internet access to be interactive. #}
+  <script src="https://unpkg.com/htmx.org@2/dist/htmx.min.js"></script>
+  <style>
+    :root {
+      --bg: #ffffff; --fg: #1a1a1a; --muted: #555; --border: #ddd;
+      --th-bg: #f5f5f5; --card: #ffffff; --code-bg: #f0f0f0;
+      --ok: #1e8449; --fail: #c0392b; --unknown: #b58900; --none: #666;
+      --overlay: rgba(0,0,0,0.5);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #16181d; --fg: #e6e6e6; --muted: #9aa0a6; --border: #3a3f47;
+        --th-bg: #22252c; --card: #1e2127; --code-bg: #2a2e36;
+        --ok: #4cc38a; --fail: #ff7a72; --unknown: #e2c15a; --none: #9aa0a6;
+        --overlay: rgba(0,0,0,0.7);
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #16181d; --fg: #e6e6e6; --muted: #9aa0a6; --border: #3a3f47;
+      --th-bg: #22252c; --card: #1e2127; --code-bg: #2a2e36;
+      --ok: #4cc38a; --fail: #ff7a72; --unknown: #e2c15a; --none: #9aa0a6;
+      --overlay: rgba(0,0,0,0.7);
+    }
+    body { font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 1100px; padding: 0 1rem; background: var(--bg); color: var(--fg); }
+    a { color: inherit; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th, td { border: 1px solid var(--border); padding: 0.45rem 0.6rem; text-align: left; vertical-align: top; }
+    th { background: var(--th-bg); }
+    td small { color: var(--muted); }
+    .status-ok { color: var(--ok); }
+    .status-fail { color: var(--fail); }
+    .status-unknown { color: var(--unknown); }
+    .status-none { color: var(--none); }
+    /* HTMX loading indicator: hidden until a request is in flight. */
+    .htmx-indicator { opacity: 0; transition: opacity .2s ease-in; }
+    .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
+    button { padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; background: var(--card); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; }
+    .details-btn { padding: 0.15rem 0.6rem; font-size: 0.85rem; margin-top: 0.3rem; }
+    .scope-chip { padding: 0.1rem 0.5rem; font-size: 0.8rem; margin: 0.1rem 0; border-radius: 999px; font-family: ui-monospace, monospace; }
+    .scope-url { overflow-wrap: anywhere; }
+    #theme-toggle { float: right; font-size: 0.9rem; padding: 0.3rem 0.8rem; }
+    /* Project detail (page + modal) */
+    .detail-grid { display: grid; grid-template-columns: 220px 1fr; gap: 0.25rem 1rem; }
+    .detail-grid dt { font-weight: 600; color: var(--muted); }
+    .detail-grid dd { margin: 0; overflow-wrap: anywhere; }
+    .modal { position: fixed; inset: 0; background: var(--overlay); z-index: 10; overflow: auto; }
+    .modal-card { background: var(--card); color: var(--fg); margin: 3rem auto; max-width: 860px; padding: 1.5rem 2rem; border-radius: 8px; position: relative; }
+    .modal-close { position: absolute; top: 0.75rem; right: 0.75rem; padding: 0.2rem 0.6rem; }
+    .readme { border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 1rem; overflow-x: auto; }
+    .readme pre { background: var(--th-bg); padding: 0.6rem; overflow-x: auto; }
+    .readme code { background: var(--code-bg); padding: 0 0.2rem; }
+    .readme pre code { background: none; padding: 0; }
+  </style>
+</head>
+<body>
+  <button type="button" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">◐ Theme</button>
+  {% block content %}{% endblock %}
+
+  {# Shared modal: project detail fragments and scope definitions both
+     HTMX-load into #modal-body. #}
+  <div id="modal" class="modal" style="display:none">
+    <div class="modal-card">
+      <button type="button" class="modal-close" aria-label="Close" onclick="hideModal()">✕</button>
+      <div id="modal-body"><p>Loading…</p></div>
+    </div>
+  </div>
+  <script>
+    function showModal() { document.getElementById('modal').style.display = 'block'; }
+    function hideModal() { document.getElementById('modal').style.display = 'none'; }
+    document.getElementById('modal').addEventListener('click', function (e) {
+      if (e.target === this) hideModal();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') hideModal();
+    });
+    function toggleTheme() {
+      var root = document.documentElement;
+      var isDark = root.dataset.theme === 'dark' ||
+        (!root.dataset.theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      var next = isDark ? 'light' : 'dark';
+      root.dataset.theme = next;
+      localStorage.setItem('gas-theme', next);
+    }
+  </script>
+</body>
+</html>

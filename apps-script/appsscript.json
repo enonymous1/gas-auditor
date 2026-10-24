@@ -1,0 +1,1 @@
+{"exceptionLogging":"STACKDRIVER","oauthScopes":["https://www.googleapis.com/auth/drive.metadata.readonly","https://www.googleapis.com/auth/script.projects.readonly","https://www.googleapis.com/auth/script.metrics","https://www.googleapis.com/auth/script.processes"],"runtimeVersion":"V8","timeZone":"America/New_York","webapp":{"access":"MYSELF","executeAs":"USER_ACCESSING"}}

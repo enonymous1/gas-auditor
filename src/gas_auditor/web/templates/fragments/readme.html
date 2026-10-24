@@ -1,0 +1,10 @@
+{# Expects: readme (web.readme.resolve_readme result). #}
+<div class="readme-block">
+  <h3>README{% if repo_url %} — <a href="{{ repo_url }}" target="_blank" rel="noopener">{{ repo }}</a>{% endif %}</h3>
+  {% if readme.state == 'ok' %}
+  <div class="readme">{{ readme.html | safe }}</div>
+  <small>Source: {{ readme.source }}</small>
+  {% else %}
+  <p><em>{{ readme.message }}</em></p>
+  {% endif %}
+</div>

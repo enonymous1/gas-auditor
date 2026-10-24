@@ -1,0 +1,11 @@
+credentials.json
+token.json
+gas_audit_state.json
+# Exported project source (gas-audit-export) -- code may embed secrets.
+gapps-projects/
+*.csv
+__pycache__/
+.venv/
+*.egg-info/
+dist/
+build/

@@ -1,0 +1,34 @@
+{% if view.rows %}
+<table>
+  <thead>
+    <tr>
+      <th>Project Name</th>
+      <th>Last Modified</th>
+      <th>File Count</th>
+      <th>Scopes Requested</th>
+      <th>Recent Execution Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in view.rows %}
+    <tr>
+      <td>
+        <a href="/project/{{ r.script_id }}">{{ r.name }}</a>
+        {% if r.link %}<br><small><a href="{{ r.link }}" target="_blank" rel="noopener">Drive ↗</a></small>{% endif %}
+        <br><button type="button" class="details-btn"
+                hx-get="/api/project/{{ r.script_id }}"
+                hx-target="#modal-body"
+                hx-swap="innerHTML"
+                onclick="showModal()">Details</button>
+      </td>
+      <td>{{ r.modified }}</td>
+      <td>{{ r.file_count }}</td>
+      <td>{% if r.scope_count %}<strong>{{ r.scope_count }}</strong><br>{% with scopes = r.scopes %}{% include "fragments/scope_chips.html" %}{% endwith %}{% else %}—{% endif %}</td>
+      <td><span class="status-{{ r.status.kind }}">{{ r.status.text }}</span></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No Apps Script projects found in this Drive.</p>
+{% endif %}

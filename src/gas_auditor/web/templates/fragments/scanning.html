@@ -1,0 +1,10 @@
+{# Self-polling fragment: HTMX re-GETs the status route every 2s and swaps
+   this fragment until the status route returns results.html instead --
+   which has no hx-trigger, so polling stops on its own. #}
+<div hx-get="/api/scan/status"
+     hx-trigger="every 2s"
+     hx-target="#inventory-results"
+     hx-swap="innerHTML">
+  <p>⏳ Scanning workspace — querying Drive and the Apps Script API for
+     every project. This can take a while on large workspaces…</p>
+</div>

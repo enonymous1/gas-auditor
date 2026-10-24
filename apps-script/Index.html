@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Stylesheet'); ?>
+</head>
+<body>
+  <header>
+    <h1>Google Apps Script — Project Inventory</h1>
+    <p>Audits every Apps Script project in <em>your</em> Drive — files, OAuth
+       scopes, recent executions — running entirely as you. Nothing is stored
+       server-side; results live in this page until you download them.</p>
+    <p id="user-line" class="muted"></p>
+  </header>
+
+  <button id="scan-btn" type="button">Scan Workspace</button>
+  <button id="csv-btn" type="button" disabled>⬇ Download CSV</button>
+  <button id="ids-btn" type="button" disabled>⬇ Download script IDs (.txt)</button>
+
+  <details>
+    <summary>Container-bound projects (Sheets / Docs / Slides / Forms)</summary>
+    <p class="muted">
+      Google hides bound scripts from Drive listing, so no scan can find
+      them automatically. Paste their script IDs below — one per line,
+      from each project's editor URL
+      (<code>script.google.com/home/projects/&lt;ID&gt;/edit</code>) — and
+      they'll be included in every scan. They're remembered in this
+      browser only (localStorage); nothing is stored server-side.
+      Tip: <em>Download script IDs</em> after a scan gives you an editable
+      file with every known project already listed — the same file the
+      Python CLI accepts via <code>--script-ids-file</code>.
+    </p>
+    <textarea id="seed-ids" rows="6" cols="70"
+      placeholder="Paste bound project script IDs here, one per line…"></textarea>
+  </details>
+
+  <div id="progress" class="muted"></div>
+  <div id="inventory-results"></div>
+
+  <?!= include('JavaScript'); ?>
+</body>
+</html>

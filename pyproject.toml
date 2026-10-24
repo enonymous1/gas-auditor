@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gas-auditor"
+version = "0.11.0"
+description = "Auditor / inventory tool for Google Apps Script projects (Drive + Apps Script API)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "google-api-python-client>=2.100",
+    "google-auth>=2.23",
+    "google-auth-oauthlib>=1.2",
+    "google-auth-httplib2>=0.2",
+    "polars>=1.0",
+]
+
+[project.optional-dependencies]
+web = ["Flask>=3.0", "Markdown>=3.6"]
+
+[tool.setuptools.package-data]
+# Jinja templates must ship inside the wheel, not just the source tree.
+"gas_auditor.web" = ["templates/*.html", "templates/fragments/*.html"]
+
+[project.scripts]
+gas-audit = "gas_auditor.cli:main"
+gas-audit-web = "gas_auditor.web.app:main"
+gas-audit-export = "gas_auditor.export_cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
