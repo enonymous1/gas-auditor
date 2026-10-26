@@ -2,6 +2,14 @@
 <html>
 <head>
   <base target="_top">
+  <!-- Apply the stored theme before first paint (no flash); absent a
+       stored choice, the CSS follows the OS via prefers-color-scheme. -->
+  <script>
+    try {
+      var t = localStorage.getItem('gas-theme');
+      if (t) document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
   <?!= include('Stylesheet'); ?>
 </head>
 <body>
@@ -14,6 +22,7 @@
   </header>
 
   <button id="scan-btn" type="button">Scan Workspace</button>
+  <button id="theme-btn" type="button" title="Toggle light/dark theme">◐ Theme</button>
   <button id="csv-btn" type="button" disabled>⬇ Download CSV</button>
   <button id="ids-btn" type="button" disabled>⬇ Download script IDs (.txt)</button>
 

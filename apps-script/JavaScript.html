@@ -210,7 +210,20 @@ function downloadIds() {
   URL.revokeObjectURL(a.href);
 }
 
+/* ------------- theme toggle (mirrors the Flask dashboard) ------------- */
+
+function toggleTheme() {
+  var root = document.documentElement;
+  var isDark = root.dataset.theme === 'dark' ||
+    (!root.dataset.theme &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  var next = isDark ? 'light' : 'dark';
+  root.dataset.theme = next;
+  try { localStorage.setItem('gas-theme', next); } catch (e) {}
+}
+
 el('scan-btn').addEventListener('click', startScan);
+el('theme-btn').addEventListener('click', toggleTheme);
 el('csv-btn').addEventListener('click', downloadCsv);
 el('ids-btn').addEventListener('click', downloadIds);
 

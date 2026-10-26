@@ -8,6 +8,9 @@ project and deployed as a web app. It runs **as the person viewing it**
   for the scopes in `appsscript.json`; the app never sees a refresh token.
 - No data stored anywhere — the scan is stateless and client-driven
   (below); results live in the browser tab and can be downloaded as CSV.
+- Theme-aware, like the Flask dashboard: follows your OS light/dark
+  setting by default, with a ◐ Theme toggle remembered in the browser
+  (`localStorage`, key `gas-theme`).
 - Scope today: **you**. Demo inside your Workspace org later by changing
   the deployment access. Public/"anyone" distribution is a later bridge
   (OAuth verification for these scopes) and is deliberately not crossed here.
