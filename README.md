@@ -1,65 +1,134 @@
 # gas-auditor — Google Apps Script Auditor
 
-Inventories every Google Apps Script project in your Drive and audits each
-one: files by type, functions, OAuth scopes, advanced services, metrics
-(active users / executions / failures), and recent executions by type/status.
+[![CI](https://github.com/enonymous1/gas-auditor/actions/workflows/ci.yml/badge.svg)](https://github.com/enonymous1/gas-auditor/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
 
-Output: one row per project in `gas_audit.csv` (or a Polars DataFrame in code).
+**Google hides some of your scripts from Drive. This finds them anyway.**
 
-## Layout (modular package, no monolith)
+gas-auditor inventories every Google Apps Script project you own and audits
+each one — files by type, functions, OAuth scopes, advanced services,
+metrics (active users, executions, failures), and recent executions by
+type and status. It is for anyone whose Apps Script estate has grown past
+what they can remember: scripts bound to Sheets and Docs, old add-ons,
+one-off automations, and the projects you forgot you wrote.
 
+One command produces one row per project in `gas_audit.csv` (or a Polars
+DataFrame in code). Read-only throughout: the four scopes it requests are
+the minimum needed, and it never modifies a project.
+
+<!-- Demo visual: record the dashboard (or a CLI run) against a throwaway
+account with toy projects — never your real account, project names would
+be on display — save it as docs/demo.gif, then uncomment this block:
+![gas-auditor dashboard demo](docs/demo.gif)
+For a theme-aware still instead, save docs/dashboard-light.png and
+docs/dashboard-dark.png and use the <picture> block below it. -->
+
+## Why this exists
+
+Google gives you a project list at script.google.com, but no inventory:
+no scopes, no execution health, no answer to "what is this script allowed
+to do, and is it still running?" Scripts accumulate silently — created
+from inside a document, deployed once as a web app, then forgotten.
+
+Worse, part of the estate is *unlistable by design*. Container-bound
+scripts (created from inside a Sheet, Doc, Slides, or Form) do not appear
+in Google Drive at all, and no API can enumerate them — see
+[Discovery](#discovery-standalone-vs-container-bound-projects) below.
+gas-auditor closes that gap with a seed-and-remember mechanism: hand it a
+bound project's ID once, and it is audited on every run from then on.
+
+## Non-goals
+
+- **It never modifies anything.** Read-only scopes; there is no write,
+  deploy, or delete path.
+- **It is not clasp.** No push/pull or local-edit workflow — for source
+  archiving, use the read-only exporter below.
+- **It cannot list triggers.** The Apps Script API exposes executions, not
+  configured triggers; execution history is the closest available signal.
+- **It is not multi-user hosting.** A local tool for your own account, or
+  the Apps Script-native version running as its viewer.
+
+## Quick start
+
+Prerequisite first, because the install alone won't run: a one-time
+Google Cloud setup (~5 minutes) — enable the Drive and Apps Script APIs,
+create a Desktop OAuth client with exactly the four read-only scopes,
+and save it as `credentials.json`. Full steps are in the Google Cloud
+setup section below (collapsed, so the quick start stays quick).
+
+```bash
+pip install -e .          # installs the package + the `gas-audit` command
+gas-audit                 # -> gas_audit.csv in the current directory
 ```
-gas-auditor/
-├── pyproject.toml            # installable package, `gas-audit` console script
-├── requirements.txt          # same dependencies, for a plain pip install
-├── src/gas_auditor/
-│   ├── __init__.py           # public API re-exports
-│   ├── __main__.py           # python -m gas_auditor
-│   ├── config.py             # SCOPES, Drive constants, AUDIT_FIELDS (no logic)
-│   ├── auth.py               # OAuth 2.0 flow + Drive/Script client construction
-│   ├── discovery.py          # Drive API v3: find all script projects
-│   ├── project.py            # Apps Script projects.get (bound parent, timestamps)
-│   ├── content.py            # projects.getContent: file stats + manifest parsing
-│   ├── metrics.py            # projects.getMetrics
-│   ├── processes.py          # processes.listScriptProcesses (recent executions)
-│   ├── audit.py              # per-project orchestration, per-stage error isolation
-│   ├── output.py             # CSV export + Polars DataFrame
-│   ├── cli.py                # argparse entry point
-│   ├── errors.py             # shared one-line error formatting
-│   ├── retry.py              # 429/5xx exponential-backoff wrapper for API calls
-│   ├── tracking.py           # cross-run state: first/last seen, missing detection
-│   ├── github_link.py        # offline GitHub-association matcher (spike)
-│   └── web/                  # OPTIONAL Flask dashboard (extra: .[web])
-│       ├── viewmodels.py     # pure display logic for the templates (no I/O)
-│       ├── templates/        # Jinja2: base.html, index.html, project.html, fragments/
-│       ├── service.py        # background scan job (thread + state)
-│       ├── readme.py         # GitHub README resolver/renderer for the detail view
-│       ├── scopes.py         # curated OAuth scope definitions + Google docs links
-│       └── app.py            # create_app() Flask factory, routes, entry point
-└── tests/                    # stdlib unittest, fixture payloads = real API shapes
-    ├── fixtures.py           # fake Drive/Script services + sample payloads
-    ├── test_content.py
-    ├── test_metrics_processes.py
-    ├── test_audit_output.py
-    ├── web_fixtures.py
-    ├── test_web_viewmodels.py  # skipped without the web extra
-    ├── test_web_service.py
-    ├── test_web_readme.py
-    ├── test_retry.py
-    ├── test_tracking.py
-    ├── test_web_scopes.py
-    └── test_web_app.py
-├── apps-script/              # Apps Script-native version (see its README)
-│   ├── appsscript.json, Config.gs, Api.gs, Audit.gs, Scan.gs, WebApp.gs
-│   └── Index.html, Stylesheet.html, JavaScript.html
-└── tests-gas/                # Node tests for the .gs implementation
-    └── test_audit.js
+
+Without installing:
+
+```bash
+pip install -r requirements.txt
+PYTHONPATH=src python -m gas_auditor
 ```
 
-`credentials.json` — **you create this** (see below; gitignored, never commit)
-`token.json` — created on first run after consent (gitignored, never commit)
+The first run opens a browser for consent and writes `token.json`.
+Later runs reuse/refresh it silently; delete `token.json` if you change
+scopes. `credentials.json` is **you create this** (gitignored, never
+commit); `token.json` is created on first run (also gitignored).
 
-## One-time Google Cloud Console setup (~5 minutes)
+```bash
+gas-audit-web               # Flask dashboard: http://127.0.0.1:5001
+gas-audit-export            # bulk source archive (see below)
+```
+
+## What you get
+
+One row per project (sample values — the shape, not real data):
+
+| Project | Files | Scopes | Executions (7d) | Failed | Status |
+|---|---|---|---|---|---|
+| Example Sheet Helper | 4 | 2 | 128 | 0 | ok |
+| Example Standalone Tool | 9 | 5 | 1,204 | 3 | 1 stage error |
+| Example Bound Script | 3 | 1 | 0 | 0 | ok |
+
+In the CSV, list columns (`oauth_scopes`, `function_names`,
+`advanced_services`) are flattened to `; `-joined text; in the Polars
+DataFrame they stay as lists, and `file_counts_by_type` /
+`process_types` / `process_statuses` stay as structs. A project that
+fails one stage (permissions, quota, deleted) lands in that stage's
+`*_error` column instead of aborting the run.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[Google APIs<br/>Drive + Apps Script] --> B[gas_auditor core<br/>discovery, content, metrics, processes]
+    B --> C[gas-audit CLI<br/>CSV / DataFrame]
+    B --> D[gas-audit-web<br/>Flask dashboard]
+    B --> E[Apps Script-native<br/>web app]
+    B --> F[gas-audit-export<br/>source archive]
+```
+
+Discovery merges two sources, because neither alone is complete:
+
+```mermaid
+flowchart TD
+    A[Drive files.list<br/>standalone projects only] --> C[Merge]
+    B[Seed IDs<br/>bound_ids.txt / tracking state] --> C
+    C --> D[projects.get + getContent<br/>+ metrics + processes]
+    D --> E[One row per project<br/>CSV / dashboard]
+    D --> F[Source export<br/>optional]
+```
+
+## Choose your surface
+
+| Surface | When to use it |
+|---|---|
+| `gas-audit` (CLI) | Scheduled inventories, CSV pipelines, library use |
+| `gas-audit-web` (Flask dashboard) | Browsing, project detail pages, clickable scope definitions |
+| `apps-script/` (Apps Script-native) | No local install, runs as the viewer, Workspace-org demo |
+| `gas-audit-export` | A local source archive of everything, bound projects included |
+
+<details>
+<summary><b>Google Cloud setup (~5 minutes)</b></summary>
 
 1. Go to https://console.cloud.google.com/ and create (or select) a project.
    This does **not** have to be any Apps Script project's own Cloud project —
@@ -85,22 +154,17 @@ gas-auditor/
    - Download the JSON, rename it to `credentials.json`, put it in the
      directory you run the auditor from.
 
-## Run
+</details>
+
+<details>
+<summary><b>CLI reference</b></summary>
 
 ```bash
-pip install -e .          # installs the package + the `gas-audit` command
-gas-audit                 # -> gas_audit.csv in the current directory
+gas-audit --output audit.csv --metrics-granularity DAILY
+gas-audit --process-limit 100 --process-since-days 90
+gas-audit --all-drives        # include shared drives
+gas-audit --verbose
 ```
-
-Without installing:
-
-```bash
-pip install -r requirements.txt
-PYTHONPATH=src python -m gas_auditor
-```
-
-First run opens a browser for consent and writes `token.json`. Later runs
-reuse/refresh it silently. Delete `token.json` if you change scopes.
 
 Cross-run tracking (first/last seen + missing detection): every run
 updates `gas_audit_state.json` (override with `--state PATH`, disable
@@ -126,16 +190,10 @@ over; that's the retry working, not a hang. (Found live, 2026-10-21: a
 13-project run without retries lost 4 stages to 429s. The Apps Script
 version's `apiGet_` has the same retry.)
 
-Useful flags:
+</details>
 
-```bash
-gas-audit --output audit.csv --metrics-granularity DAILY
-gas-audit --process-limit 100 --process-since-days 90
-gas-audit --all-drives        # include shared drives
-gas-audit --verbose
-```
-
-## Exporting project source code (`gas-audit-export`)
+<details>
+<summary><b>Exporting project source code (<code>gas-audit-export</code>)</b></summary>
 
 The auditor inspects code; the exporter *keeps* it — a local source
 archive of your projects, bound ones included (it fetches by scriptId):
@@ -162,7 +220,10 @@ project failed (each failure is isolated and logged).
 keys in code. The default `gapps-projects/` dir is gitignored here;
 treat any export root the same way.
 
-## Web dashboard (optional, Flask + Jinja2 + HTMX)
+</details>
+
+<details>
+<summary><b>Web dashboard (Flask + Jinja2 + HTMX)</b></summary>
 
 An additional surface over the same core — the CLI, CSV export, and library
 API above are unchanged, and nothing in the core imports Flask.
@@ -238,7 +299,10 @@ Notes:
   `/api/export.csv` works as named (FastHTML's static route 404'd
   extension-suffixed paths, forcing `/api/export`).
 
-## Apps Script-native dashboard (alternative front-end)
+</details>
+
+<details>
+<summary><b>Apps Script-native dashboard (alternative front-end)</b></summary>
 
 `apps-script/` contains the same audit implemented as a Google Apps Script
 project, deployable as a web app that runs **as the viewing user** — no
@@ -247,7 +311,10 @@ client-side CSV download. Built for personal use now, Workspace-org demo
 later; public distribution is a separate bridge (OAuth verification).
 See `apps-script/README.md` for the file map and deploy steps.
 
-## GitHub association matching (spike, Python only, opt-in)
+</details>
+
+<details>
+<summary><b>GitHub association matching (spike, Python only, opt-in)</b></summary>
 
 There is no registry linking a GAS project to a GitHub repo, so this is
 **evidence-tiered matching**, never a boolean lookup. It is fully offline
@@ -293,7 +360,10 @@ Known gap: the Apps Script-native version does **not** have these fields
 yet (its row shape stays at the original 41 fields) — parity is a
 deliberate follow-up once the tiers prove themselves on real data.
 
-## Use as a library (Polars)
+</details>
+
+<details>
+<summary><b>Use as a library (Polars)</b></summary>
 
 ```python
 from pathlib import Path
@@ -315,15 +385,62 @@ stay as list columns and `file_counts_by_type` / `process_types` /
 `process_statuses` stay as structs; in the CSV they are flattened to
 `; `-joined text.
 
-## Tests
+</details>
 
-Offline, no Google account needed (fixtures mirror the real API payloads):
+<details>
+<summary><b>Layout (modular package, no monolith)</b></summary>
 
-```bash
-PYTHONPATH=src:tests python -m unittest discover -s tests -v
+```
+gas-auditor/
+├── pyproject.toml            # installable package, `gas-audit` console script
+├── requirements.txt          # same dependencies, for a plain pip install
+├── src/gas_auditor/
+│   ├── __init__.py           # public API re-exports
+│   ├── __main__.py           # python -m gas_auditor
+│   ├── config.py             # SCOPES, Drive constants, AUDIT_FIELDS (no logic)
+│   ├── auth.py               # OAuth 2.0 flow + Drive/Script client construction
+│   ├── discovery.py          # Drive API v3: find all script projects
+│   ├── project.py            # Apps Script projects.get (bound parent, timestamps)
+│   ├── content.py            # projects.getContent: file stats + manifest parsing
+│   ├── metrics.py            # projects.getMetrics
+│   ├── processes.py          # processes.listScriptProcesses (recent executions)
+│   ├── audit.py              # per-project orchestration, per-stage error isolation
+│   ├── output.py             # CSV export + Polars DataFrame
+│   ├── cli.py                # argparse entry point
+│   ├── errors.py             # shared one-line error formatting
+│   ├── retry.py              # 429/5xx exponential-backoff wrapper for API calls
+│   ├── tracking.py           # cross-run state: first/last seen, missing detection
+│   ├── github_link.py        # offline GitHub-association matcher (spike)
+│   └── web/                  # OPTIONAL Flask dashboard (extra: .[web])
+│       ├── viewmodels.py     # pure display logic for the templates (no I/O)
+│       ├── templates/        # Jinja2: base.html, index.html, project.html, fragments/
+│       ├── service.py        # background scan job (thread + state)
+│       ├── readme.py         # GitHub README resolver/renderer for the detail view
+│       ├── scopes.py         # curated OAuth scope definitions + Google docs links
+│       └── app.py            # create_app() Flask factory, routes, entry point
+└── tests/                    # stdlib unittest, fixture payloads = real API shapes
+    ├── fixtures.py           # fake Drive/Script services + sample payloads
+    ├── test_content.py
+    ├── test_metrics_processes.py
+    ├── test_audit_output.py
+    ├── web_fixtures.py
+    ├── test_web_viewmodels.py  # skipped without the web extra
+    ├── test_web_service.py
+    ├── test_web_readme.py
+    ├── test_retry.py
+    ├── test_tracking.py
+    ├── test_web_scopes.py
+    └── test_web_app.py
+├── apps-script/              # Apps Script-native version (see its README)
+│   ├── appsscript.json, Config.gs, Api.gs, Audit.gs, Scan.gs, WebApp.gs
+│   └── Index.html, Stylesheet.html, JavaScript.html
+└── tests-gas/                # Node tests for the .gs implementation
+    └── test_audit.js
 ```
 
-## Discovery: standalone vs container-bound projects (read this)
+</details>
+
+## Discovery: standalone vs container-bound projects
 
 Drive `files.list` finds **standalone** projects only. Google's docs say it
 plainly: container-bound scripts (created from inside a Sheet / Doc /
@@ -368,8 +485,13 @@ every bound project), making binds enumerable via the container files.
 More moving parts inside production scripts; the seed file achieves the
 same inventory with zero code inside them.
 
-The Apps Script-native dashboard shares this platform blind spot (it lists
-via the same Drive API) — seeded-ID support there is described above.
+## Tests
+
+Offline, no Google account needed (fixtures mirror the real API payloads):
+
+```bash
+PYTHONPATH=src:tests python -m unittest discover -s tests -v
+```
 
 ## Known limits
 
