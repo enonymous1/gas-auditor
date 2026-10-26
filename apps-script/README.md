@@ -72,6 +72,31 @@ myaccount.google.com/permissions and reopen it). The Python tool is
 unaffected: it calls the same APIs directly with OAuth tokens, not via
 `UrlFetchApp`.
 
+## Drive API not enabled (403) (read this if Scan fails at discovery)
+
+If Scan fails with *"HttpError 403: Google Drive API has not been used
+in project … before or it is disabled"*, the Drive API is not enabled
+in the Cloud project the script runs under. Note the project number in
+the error: for a script on Apps Script's default Cloud project it is
+*not* the project you created for the Python auditor — that is why the
+Python tool works and the web app does not. The fix, in order:
+
+1. Open the console link from the error itself
+   (`console.developers.google.com/apis/api/drive.googleapis.com/overview?project=<that
+   number>`), click **Enable**, wait ~2 minutes for propagation, retry.
+2. If the console will not let you manage that project (default Apps
+   Script projects are Google-managed), switch the script to a standard
+   project instead: editor → **Project Settings** → **Google Cloud
+   Platform (GCP) Project** → **Change project** → enter the number of
+   the GCP project you already created for the Python auditor, where the
+   Drive and Apps Script APIs are already enabled. No redeploy is needed
+   for the switch itself, but expect a fresh consent prompt (the consent
+   screen now follows the new project; make sure you are a test user
+   there if it is in Testing mode).
+
+If a similar 403 then names `script.googleapis.com`, enable the Apps
+Script API the same way — it is normally already on for script projects.
+
 ## Deploy (manual, ~5 minutes)
 
 1. Go to https://script.google.com → **New project**.
