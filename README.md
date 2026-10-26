@@ -14,8 +14,11 @@ what they can remember: scripts bound to Sheets and Docs, old add-ons,
 one-off automations, and the projects you forgot you wrote.
 
 One command produces one row per project in `gas_audit.csv` (or a Polars
-DataFrame in code). Read-only throughout: the four scopes it requests are
-the minimum needed, and it never modifies a project.
+DataFrame in code). Read-only throughout: the scopes it requests are
+the minimum needed, and it never modifies a project. (The Apps
+Script-native version additionally needs `script.external_request` so
+its `UrlFetchApp` calls can reach Google's APIs — that scope grants no
+data access by itself.)
 
 <!-- Demo visual: record the dashboard (or a CLI run) against a throwaway
 account with toy projects — never your real account, project names would

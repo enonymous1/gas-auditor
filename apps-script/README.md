@@ -16,7 +16,7 @@ project and deployed as a web app. It runs **as the person viewing it**
 
 | File | Role |
 |---|---|
-| `appsscript.json` | Manifest: exactly the 4 read-only audit scopes, webapp `USER_ACCESSING` / `MYSELF` |
+| `appsscript.json` | Manifest: the 4 read-only audit scopes + `script.external_request` (required for `UrlFetchApp` calls — see "Missing scope" note below), webapp `USER_ACCESSING` / `MYSELF` |
 | `Config.gs` | API base URLs, metrics granularity, chunk size |
 | `Api.gs` | UrlFetch wrappers: Drive v3 discovery, Script API v1 get/getContent/getMetrics/listScriptProcesses |
 | `Audit.gs` | Parsers + per-project audit (ported from the Python modules; row fields identical to Python `AUDIT_FIELDS`) |
@@ -52,6 +52,23 @@ server-side. After a scan, **Download script IDs (.txt)** produces an
 editable file of every known project ID in the same format the Python
 CLI accepts (`--script-ids-file`), and vice versa.
 
+## Missing scope: `script.external_request` (read this if Scan fails)
+
+If Scan fails with *"Specified permissions are not sufficient to call
+UrlFetchApp.fetch. Required permissions:
+https://www.googleapis.com/auth/script.external_request"*, the manifest
+is missing that scope. It happens because pinning `oauthScopes` in
+`appsscript.json` turns off Apps Script's automatic scope detection, and
+every Drive/Script API call in this app goes through `UrlFetchApp.fetch`
+(`Api.gs`), which requires `script.external_request` in addition to the
+data scopes. The fix is the scope's presence in the manifest (it is there
+in this repo) plus a redeploy — a `push` alone does not change what the
+deployed version serves — followed by re-authorization on first open
+(if no prompt appears, revoke the app at
+myaccount.google.com/permissions and reopen it). The Python tool is
+unaffected: it calls the same APIs directly with OAuth tokens, not via
+`UrlFetchApp`.
+
 ## Deploy (manual, ~5 minutes)
 
 1. Go to https://script.google.com → **New project**.
@@ -65,8 +82,11 @@ CLI accepts (`--script-ids-file`), and vice versa.
 4. **Deploy → New deployment → Web app**:
    - Execute as: **User accessing the web app**
    - Who has access: **Only myself**
-5. Open the web app URL. First visit asks you to authorize the 4 read-only
-   scopes — because the project runs on Apps Script's default Cloud project,
+5. Open the web app URL. First visit asks you to authorize the scopes —
+   the 4 read-only data scopes plus `script.external_request` (the
+   permission for `UrlFetchApp` to call Google's APIs; it grants no data
+   access by itself) — because the project runs on Apps Script's default
+   Cloud project,
    you may see an "unverified app" notice for your own project; that's the
    personal-use path (Advanced → proceed). It is *not* the public-launch
    verification, which only enters the picture at "anyone" access.
