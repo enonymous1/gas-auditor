@@ -83,7 +83,8 @@ def _normalise_candidate(raw: dict[str, Any]) -> dict[str, Any]:
     name = raw.get("name") or (full.split("/")[-1] if full else "")
     c["name"] = str(name)
     c["full_name"] = str(full) or (str(name) if name else "")
-    c["html_url"] = str(raw.get("html_url") or raw.get("url") or raw.get("web_url") or "")
+    c["html_url"] = str(
+        raw.get("html_url") or raw.get("url") or raw.get("web_url") or "")
     if not c["html_url"] and c["full_name"] and "/" in c["full_name"]:
         c["html_url"] = "https://github.com/" + c["full_name"]
     c["description"] = str(raw.get("description") or "")
@@ -244,7 +245,9 @@ def _name_signals(project_name: str, repo_name: str) -> tuple[bool, bool]:
     return False, ratio >= 0.85
 
 
-def _function_overlap(project: dict[str, Any], candidate: dict[str, Any]) -> tuple[int, float]:
+def _function_overlap(
+    project: dict[str, Any], candidate: dict[str, Any]
+) -> tuple[int, float]:
     """(shared count, overlap ratio) over non-generic function names."""
     pf = {f.lower() for f in project.get("function_names") or []} - COMMON_FUNCTIONS
     rf = {f.lower() for f in candidate.get("function_names") or []} - COMMON_FUNCTIONS
@@ -314,7 +317,8 @@ def match_project(
             score += 15
         if shared:
             pf_count = len(
-                {f.lower() for f in project.get("function_names") or []} - COMMON_FUNCTIONS
+                {f.lower() for f in project.get("function_names") or []}
+                - COMMON_FUNCTIONS
             )
             evidence.append(f"{shared}/{pf_count} function names overlap")
             score += shared * 5 + (10 if ratio >= 0.5 else 0)

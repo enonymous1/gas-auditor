@@ -12,9 +12,9 @@ try:
 except RuntimeError:  # Flask not installed
     raise unittest.SkipTest("Flask not installed (web extra)")
 
-from gas_auditor.web.service import ScanService
-
 from web_fixtures import FAKE_ROW
+
+from gas_auditor.web.service import ScanService
 
 
 def _client(rows=None):
@@ -134,7 +134,8 @@ class TestRoutes(unittest.TestCase):
             deadline = time.time() + 5
             while time.time() < deadline:
                 if client.get("/api/scan/status").status_code == 200 and \
-                        "Linked" in client.get("/api/scan/status").get_data(as_text=True):
+                        "Linked" in client.get("/api/scan/status").get_data(
+                            as_text=True):
                     break
                 time.sleep(0.02)
             r = client.get("/api/project/L1/readme")

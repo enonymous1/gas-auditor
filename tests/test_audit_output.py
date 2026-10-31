@@ -2,10 +2,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fixtures import DRIVE_FILE, FakeScript
+
 from gas_auditor import audit_project, export_csv, to_dataframe
 from gas_auditor.config import AUDIT_FIELDS
-
-from fixtures import DRIVE_FILE, FakeScript
 
 
 class TestAuditProject(unittest.TestCase):

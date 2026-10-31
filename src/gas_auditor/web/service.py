@@ -14,22 +14,13 @@ from __future__ import annotations
 
 import logging
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from ..audit import audit_project
-from ..auth import build_services, get_credentials
-from ..discovery import discover_projects, format_script_ids, read_script_ids
-from ..github_link import enrich_rows, load_candidates, load_mapping
-from ..tracking import (
-    apply_state,
-    describe_changes,
-    load_state,
-    save_state,
-    update_state,
-)
+from ..pipeline import ScanOptions, run_scan
 
 log = logging.getLogger(__name__)
 
@@ -80,6 +71,9 @@ class ScanService:
             self._state.finished_at = _now()
 
     def snapshot(self) -> ScanState:
+        """A copy of the current scan state (status, rows, timestamps,
+        error). Copying under the lock means callers -- HTTP handlers
+        polling mid-scan -- never observe a half-updated state."""
         with self._lock:
             return ScanState(
                 status=self._state.status,
@@ -105,57 +99,31 @@ def make_default_runner(
     script_ids_file: Path | None = None,
     script_ids_out: Path | None = None,
 ) -> Callable[[], list[dict[str, Any]]]:
-    """Build the real scan callable from the existing core modules.
+    """Build the real scan callable around the shared pipeline
+    (pipeline.run_scan -- the same sequence the CLI runs, so a dashboard
+    scan and a CLI run can never disagree about what a scan means).
     Auth happens inside the callable (i.e. on Scan-click, on the worker
     thread) -- importing or starting the web app needs no credentials.
     GitHub enrichment is opt-in, exactly like the CLI: pass a candidates
     source (JSON inventory or checkout directory) and/or a mapping file."""
 
+    options = ScanOptions(
+        credentials_path=credentials_path,
+        token_path=token_path,
+        metrics_granularity=metrics_granularity,
+        process_limit=process_limit,
+        process_since_days=process_since_days,
+        all_drives=all_drives,
+        github_candidates_path=github_candidates_path,
+        github_mapping_path=github_mapping_path,
+        state_path=state_path,
+        script_ids=list(script_ids or []),
+        script_ids_file=script_ids_file,
+        script_ids_out=script_ids_out,
+    )
+
     def run() -> list[dict[str, Any]]:
-        creds = get_credentials(credentials_path, token_path)
-        drive, script = build_services(creds)
-        # State-known IDs seed discovery (container-bound projects are
-        # invisible to Drive listing; see discovery.py). Loaded once here
-        # and reused for the post-scan tracking update below.
-        state = load_state(state_path) if state_path is not None else None
-        file_ids = read_script_ids(script_ids_file) if script_ids_file else []
-        seed_ids: list[str] = list(script_ids or []) + file_ids
-        if state is not None:
-            seed_ids.extend(state.get("projects", {}).keys())
-        drive_files = discover_projects(
-            drive, all_drives=all_drives, extra_ids=seed_ids
-        )
-        rows = [
-            audit_project(
-                f, script,
-                metrics_granularity=metrics_granularity,
-                process_limit=process_limit,
-                process_since_days=process_since_days,
-            )
-            for f in drive_files
-        ]
-        if github_candidates_path or github_mapping_path:
-            candidates = (
-                load_candidates(github_candidates_path)
-                if github_candidates_path else []
-            )
-            mapping = load_mapping(github_mapping_path) if github_mapping_path else {}
-            explicit = {f["id"]: f.get("description") or "" for f in drive_files}
-            enrich_rows(rows, candidates, mapping, explicit)
-        if state is not None:
-            # Same cross-run tracking as the CLI, sharing its state file.
-            changes = update_state(
-                state, rows,
-                scope="all_drives" if all_drives else "my_drive",
-            )
-            apply_state(rows, state)
-            save_state(state_path, state)
-            for line in describe_changes(changes):
-                log.info(line)
-        if script_ids_out is not None:
-            script_ids_out.write_text(
-                format_script_ids(rows, extra_ids=file_ids), encoding="utf-8"
-            )
-        return rows
+        """Execute one scan on the calling thread via the shared pipeline."""
+        return run_scan(options)
 
     return run

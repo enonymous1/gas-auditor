@@ -1,9 +1,9 @@
 import unittest
 
+from fixtures import METRICS, PROCESSES
+
 from gas_auditor.metrics import summarise_metrics
 from gas_auditor.processes import summarise_processes
-
-from fixtures import METRICS, PROCESSES
 
 
 class TestMetrics(unittest.TestCase):

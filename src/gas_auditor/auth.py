@@ -51,7 +51,13 @@ def get_credentials(credentials_path: Path, token_path: Path) -> Credentials:
         # port=0 lets the OS pick a free port for the local redirect server.
         creds = flow.run_local_server(port=0)
 
-    token_path.write_text(creds.to_json(), encoding="utf-8")
+    # Atomic write (temp file + replace, same pattern as
+    # tracking.save_state): a killed process must not leave a half-written
+    # token.json behind, because a corrupt token file fails the next
+    # run's load instead of triggering a fresh consent.
+    tmp = token_path.with_suffix(token_path.suffix + ".tmp")
+    tmp.write_text(creds.to_json(), encoding="utf-8")
+    tmp.replace(token_path)
     return creds
 
 

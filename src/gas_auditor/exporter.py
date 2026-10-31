@@ -27,10 +27,11 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from .project import fetch_project_meta
 from .retry import execute_with_retry
@@ -70,6 +71,8 @@ class ExportResult:
 
     @property
     def ok(self) -> bool:
+        """True when the export completed (error == ''), False when the
+        project failed at fetch or write and `error` explains why."""
         return not self.error
 
 

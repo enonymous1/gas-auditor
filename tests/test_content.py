@@ -1,8 +1,8 @@
 import unittest
 
-from gas_auditor.content import parse_manifest, summarise_content
-
 from fixtures import CONTENT
+
+from gas_auditor.content import parse_manifest, summarise_content
 
 
 class TestContent(unittest.TestCase):

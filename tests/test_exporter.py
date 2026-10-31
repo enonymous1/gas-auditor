@@ -5,6 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fixtures import CONTENT, FakeScript
+
 from gas_auditor.exporter import (
     export_project,
     export_projects,
@@ -12,8 +14,6 @@ from gas_auditor.exporter import (
     slugify,
     write_project_files,
 )
-
-from fixtures import CONTENT, FakeScript
 
 
 class _BadScript:

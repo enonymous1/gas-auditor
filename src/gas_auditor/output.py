@@ -45,6 +45,8 @@ def render_csv(rows: list[dict[str, Any]]) -> str:
 
 
 def export_csv(rows: list[dict[str, Any]], output_path: Path) -> None:
+    """Write the audit rows as CSV to `output_path` (overwrites), and
+    log the row count and destination. See render_csv for the format."""
     output_path.write_text(render_csv(rows), encoding="utf-8")
     log.info("Wrote %d rows to %s", len(rows), output_path)
 

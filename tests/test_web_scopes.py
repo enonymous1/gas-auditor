@@ -29,8 +29,10 @@ class TestScopeView(unittest.TestCase):
     def test_anchor_mapping(self):
         self.assertTrue(scope_view(P + "spreadsheets")["docs_url"].endswith("#sheets"))
         self.assertTrue(scope_view(P + "gmail.readonly")["docs_url"].endswith("#gmail"))
-        self.assertTrue(scope_view(P + "script.projects")["docs_url"].endswith("#script"))
-        self.assertTrue(scope_view(P + "userinfo.email")["docs_url"].endswith("#oauth2"))
+        self.assertTrue(
+            scope_view(P + "script.projects")["docs_url"].endswith("#script"))
+        self.assertTrue(
+            scope_view(P + "userinfo.email")["docs_url"].endswith("#oauth2"))
 
     def test_unknown_scope_is_honest(self):
         v = scope_view(P + "some.future.scope")

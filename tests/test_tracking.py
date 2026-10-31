@@ -89,7 +89,8 @@ class TestLifecycle(unittest.TestCase):
         changes = update_state(state, [row("A", "Alpha")],
                                scope="my_drive", now=T2)
         lines = describe_changes(changes)
-        self.assertTrue(any("MISSING" in l and "Beta" in l for l in lines))
+        self.assertTrue(any(
+            "MISSING" in line and "Beta" in line for line in lines))
 
 
 class TestPersistence(unittest.TestCase):

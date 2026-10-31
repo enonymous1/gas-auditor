@@ -36,6 +36,10 @@ def _ids_from_csv(path: Path) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Parse selectors, resolve the project-ID union, export each
+    project's source (per-project failures isolated), and report.
+    Returns 0 when every export succeeded, 1 when any failed, 2 when
+    no project IDs were selected at all."""
     logging.basicConfig(
         level=logging.INFO, format="%(levelname)s %(message)s"
     )
@@ -101,7 +105,9 @@ def main(argv: list[str] | None = None) -> int:
     failed = 0
     for r in results:
         if r.ok:
-            stale = f" ({len(r.stale_files)} stale file(s) kept)" if r.stale_files else ""
+            stale = (
+            f" ({len(r.stale_files)} stale file(s) kept)"
+            if r.stale_files else "")
             log.info("✓ %s -> %s [%d file(s)]%s",
                      r.title or r.script_id, r.directory,
                      len(r.files_written), stale)

@@ -19,11 +19,16 @@ Module map (separation of concerns):
     metrics.py    projects.getMetrics
     processes.py  processes.listScriptProcesses (recent executions)
     audit.py      per-project orchestration with per-stage error isolation
+    pipeline.py   the full scan (discover -> audit -> enrich -> track),
+                  shared by the CLI and the dashboard -- the one place
+                  that sequence lives
     output.py     CSV export + Polars DataFrame
     github_link.py offline GitHub-association matcher (evidence tiers, spike)
     tracking.py   cross-run state: first/last seen + missing detection
     retry.py      429/5xx exponential-backoff wrapper for API calls
     cli.py        argparse entry point (`gas-audit` / `python -m gas_auditor`)
+    export_cli.py argparse entry point (`gas-audit-export` source archive)
+    exporter.py   per-project source download to local folders
     errors.py     shared one-line error formatting
     web/          optional Flask/Jinja dashboard subpackage (`gas-audit-web`);
                   not imported here, so the core works without Flask
@@ -40,6 +45,7 @@ from .exporter import ExportResult, export_project, export_projects
 from .github_link import enrich_rows, load_candidates, load_mapping, match_project
 from .metrics import summarise_metrics
 from .output import export_csv, to_dataframe
+from .pipeline import ScanOptions, run_scan
 from .processes import summarise_processes
 from .retry import execute_with_retry
 
@@ -64,6 +70,8 @@ __all__ = [
     "load_mapping",
     "match_project",
     "parse_manifest",
+    "run_scan",
+    "ScanOptions",
     "summarise_content",
     "summarise_metrics",
     "summarise_processes",

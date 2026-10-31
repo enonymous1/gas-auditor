@@ -17,7 +17,8 @@ from __future__ import annotations
 import logging
 import random
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from .config import API_MAX_RETRIES, API_RETRY_BASE_SECONDS
 

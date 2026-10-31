@@ -35,10 +35,14 @@ STATE_VERSION = 1
 
 
 def now_iso() -> str:
+    """Current UTC time as 'YYYY-MM-DDTHH:MM:SSZ' (the timestamp format
+    stored in first_seen / last_seen / missing_since)."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def empty_state() -> dict[str, Any]:
+    """A fresh state dict: current STATE_VERSION, no last scope, no
+    projects. Returned by load_state for a missing or corrupt file."""
     return {"version": STATE_VERSION, "last_scope": "", "projects": {}}
 
 

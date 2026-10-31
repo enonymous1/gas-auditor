@@ -52,7 +52,8 @@ def parse_manifest(files: list[dict[str, Any]]) -> dict[str, Any]:
         # Shape: {"userSymbol": "Drive", "serviceId": "drive", "version": "v2"}
         label = svc.get("userSymbol") or svc.get("serviceId") or "?"
         out["advanced_services"].append(
-            f"{label} (serviceId={svc.get('serviceId', '?')}, {svc.get('version', '?')})"
+            f"{label} (serviceId={svc.get('serviceId', '?')}, "
+            f"{svc.get('version', '?')})"
         )
     return out
 

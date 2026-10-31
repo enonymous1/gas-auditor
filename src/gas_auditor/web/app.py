@@ -41,9 +41,10 @@ Flask is an optional dependency: pip install -e ".[web]"
 from __future__ import annotations
 
 import argparse
-import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 try:
     from flask import Flask, Response, render_template, request
@@ -55,6 +56,7 @@ except ImportError as exc:  # pragma: no cover -- exercised only without extra
 from ..discovery import format_script_ids
 from ..github_link import load_candidates
 from ..output import render_csv
+from ..tracking import load_state
 from .readme import candidate_for_row, resolve_readme
 from .scopes import scope_view
 from .service import ScanService, make_default_runner
@@ -67,7 +69,7 @@ def create_app(
     service: ScanService | None = None,
     *,
     github_candidates: list | None = None,
-    readme_http_get=None,
+    readme_http_get: Callable[..., Any] | None = None,
     **scan_kwargs,
 ) -> Flask:
     """Build the Flask app. Pass a ScanService to inject a scan runner
@@ -116,6 +118,9 @@ def create_app(
 
     @app.get("/")
     def index():
+        """Dashboard page, seeded with the last scan's state (results,
+        polling fragment, or error) so back-navigation never forces a
+        re-scan."""
         # Render the last scan's state server-side: completed -> results
         # (back-navigation lands on the table, no re-scan), running ->
         # the polling fragment (rejoins the in-flight scan), error ->
@@ -136,6 +141,8 @@ def create_app(
 
     @app.get("/api/scope")
     def scope_definition():
+        """Scope-definition modal fragment for ?u=<scope URL> (400 when
+        the URL is missing)."""
         url = request.args.get("u", "")
         if not url:
             return Response("<p>Missing scope URL.</p>", status=400)
@@ -143,12 +150,16 @@ def create_app(
 
     @app.get("/api/scan")
     def scan():
+        """Start a scan (or rejoin the running one) and return the
+        self-polling scanning fragment."""
         # Idempotent while running: a second click just rejoins the poll.
         service.start()
         return render_template("fragments/scanning.html")
 
     @app.get("/api/scan/status")
     def scan_status():
+        """Poll target: scanning fragment while running, results fragment
+        when done (polling stops), error fragment on failure."""
         state = service.snapshot()
         if state.status in ("running", "idle"):
             return render_template("fragments/scanning.html")
@@ -161,6 +172,8 @@ def create_app(
 
     @app.get("/project/<script_id>")
     def project_page(script_id):
+        """Full-page detail for one project of the last completed scan
+        (404 when there is no completed scan or the ID isn't in it)."""
         row = _find_row(script_id)
         if row is None:
             return Response(
@@ -172,6 +185,7 @@ def create_app(
 
     @app.get("/api/project/<script_id>")
     def project_fragment(script_id):
+        """The same project detail as an HTMX fragment (the table's modal)."""
         row = _find_row(script_id)
         if row is None:
             return Response(
@@ -183,6 +197,8 @@ def create_app(
 
     @app.get("/api/project/<script_id>/readme")
     def project_readme(script_id):
+        """Rendered README fragment for the project's linked repo, cached
+        for the session (local checkout first, else raw.githubusercontent)."""
         row = _find_row(script_id)
         if row is None:
             return Response("<p>Unknown project — run a scan first.</p>",
@@ -205,16 +221,16 @@ def create_app(
         """Downloadable, editable script-IDs file generated from the last
         scan's rows (plus any IDs remembered in the tracking state) --
         the easy base for adding missing container-bound IDs."""
+        # Reuse tracking.load_state (validates shape, tolerates a corrupt
+        # file) instead of re-reading the JSON here -- the previous
+        # inline parse duplicated that logic and silently differed on
+        # malformed state.
         ids_state_path = scan_kwargs.get("state_path")
         state_ids: list[str] = []
-        if ids_state_path is not None and Path(ids_state_path).exists():
-            try:
-                saved = json.loads(
-                    Path(ids_state_path).read_text(encoding="utf-8")
-                )
-                state_ids = list(saved.get("projects", {}).keys())
-            except (OSError, ValueError):
-                state_ids = []
+        if ids_state_path is not None:
+            state_ids = list(
+                load_state(Path(ids_state_path)).get("projects", {}).keys()
+            )
         body = format_script_ids(service.snapshot().rows, extra_ids=state_ids)
         return Response(
             body,
@@ -226,6 +242,8 @@ def create_app(
 
     @app.get("/api/export.csv")
     def export_csv():
+        """Last completed scan as a CSV download (409 until a scan has
+        completed)."""
         state = service.snapshot()
         if state.status != "done":
             return Response(
@@ -242,6 +260,10 @@ def create_app(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """`gas-audit-web` entry point: parse flags, build the app (a real
+    Google-backed scan runner), and serve it on Flask's development
+    server. Local-only by default -- see the module docstring before
+    changing --host."""
     parser = argparse.ArgumentParser(
         description="Serve the GAS auditor Flask dashboard."
     )

@@ -20,8 +20,9 @@ from __future__ import annotations
 
 import html
 import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 _RAW = "https://raw.githubusercontent.com/{repo}/{branch}/README.md"
 _README_NAMES = ("README.md", "readme.md", "README.markdown", "README")

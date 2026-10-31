@@ -18,8 +18,9 @@ projects are re-fetched and fully audited forever after.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 from .config import SCRIPT_MIMETYPE
 from .retry import execute_with_retry

@@ -31,3 +31,14 @@ gas-audit-export = "gas_auditor.export_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff]
+# Lint gate (see CI): py310 floor, 88-col lines, import order, and
+# blind-except discipline (the per-stage/per-project `except Exception`
+# blocks that are intentional carry an explicit `# noqa: BLE001` with a
+# reason -- see audit.py, discovery.py, exporter.py).
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "BLE", "UP"]

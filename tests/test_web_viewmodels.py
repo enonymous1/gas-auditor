@@ -2,6 +2,8 @@
 
 import unittest
 
+from web_fixtures import FAKE_ROW
+
 from gas_auditor.web.viewmodels import (
     fmt_time,
     project_detail,
@@ -9,8 +11,6 @@ from gas_auditor.web.viewmodels import (
     row_view,
     status_view,
 )
-
-from web_fixtures import FAKE_ROW
 
 
 class TestFmtTime(unittest.TestCase):

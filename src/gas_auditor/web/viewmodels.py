@@ -167,7 +167,9 @@ def project_detail(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def results_view(rows: list[dict[str, Any]], *, finished_at: str = "") -> dict[str, Any]:
+def results_view(
+    rows: list[dict[str, Any]], *, finished_at: str = ""
+) -> dict[str, Any]:
     """Everything _results.html needs: summary line + per-row view dicts."""
     errored = sum(
         1 for r in rows

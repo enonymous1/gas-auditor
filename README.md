@@ -4,6 +4,8 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
 
+## Description
+
 **Google hides some of your scripts from Drive. This finds them anyway.**
 
 gas-auditor inventories every Google Apps Script project you own and audits
@@ -20,14 +22,19 @@ Script-native version additionally needs `script.external_request` so
 its `UrlFetchApp` calls can reach Google's APIs — that scope grants no
 data access by itself.)
 
-<!-- Demo visual: record the dashboard (or a CLI run) against a throwaway
-account with toy projects — never your real account, project names would
-be on display — save it as docs/demo.gif, then uncomment this block:
-![gas-auditor dashboard demo](docs/demo.gif)
-For a theme-aware still instead, save docs/dashboard-light.png and
-docs/dashboard-dark.png and use the <picture> block below it. -->
+<!-- VISUAL 1 — dashboard screenshots (highest-impact asset in the repo).
+Capture the Flask dashboard results table against a THROWAWAY account
+with toy projects — never your real account, project names would be on
+display. Save a light-mode and a dark-mode shot, ~1440px wide, table
+filled with 4-6 rows and the theme toggle visible, as
+docs/dashboard-light.png and docs/dashboard-dark.png, then uncomment:
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/dashboard-dark.png">
+  <img src="docs/dashboard-light.png" alt="gas-auditor dashboard: project inventory table">
+</picture>
+Theme-aware <picture> renders the matching shot automatically. -->
 
-## Why this exists
+### Why this exists
 
 Google gives you a project list at script.google.com, but no inventory:
 no scopes, no execution health, no answer to "what is this script allowed
@@ -41,7 +48,7 @@ in Google Drive at all, and no API can enumerate them — see
 gas-auditor closes that gap with a seed-and-remember mechanism: hand it a
 bound project's ID once, and it is audited on every run from then on.
 
-## Non-goals
+### Non-goals
 
 - **It never modifies anything.** Read-only scopes; there is no write,
   deploy, or delete path.
@@ -52,35 +59,90 @@ bound project's ID once, and it is audited on every run from then on.
 - **It is not multi-user hosting.** A local tool for your own account, or
   the Apps Script-native version running as its viewer.
 
-## Quick start
+## Prerequisites
 
-Prerequisite first, because the install alone won't run: a one-time
-Google Cloud setup (~5 minutes) — enable the Drive and Apps Script APIs,
-create a Desktop OAuth client with exactly the four read-only scopes,
-and save it as `credentials.json`. Full steps are in the Google Cloud
-setup section below (collapsed, so the quick start stays quick).
+- **Python 3.10+** and `pip`. (Node 20+ only if you want to run the
+  Apps Script-native version's tests.)
+- **A Google account** whose Apps Script projects you want to inventory.
+- **A one-time Google Cloud setup (~5 minutes)** — the install alone
+  won't run without it:
+
+  1. Go to https://console.cloud.google.com/ and create (or select) a
+     project. This does **not** have to be any Apps Script project's own
+     Cloud project — one auditor project works for everything you own.
+  2. **APIs & Services → Library** — enable both:
+     - **Google Drive API**
+     - **Google Apps Script API**
+  3. **APIs & Services → OAuth consent screen**
+     - User type: **External** (or **Internal** if this is a Workspace
+       org account and you only need it inside the org).
+     - App name / support email / developer email: anything sensible.
+     - Scopes (add exactly these four):
+       - `https://www.googleapis.com/auth/drive.metadata.readonly`
+       - `https://www.googleapis.com/auth/script.projects.readonly`
+       - `https://www.googleapis.com/auth/script.metrics`
+       - `https://www.googleapis.com/auth/script.processes`
+     - If the app stays in **Testing** status (External): add your own
+       Google account under **Test users**, otherwise Google blocks the
+       consent. Note: Testing-mode refresh tokens expire after 7 days —
+       if the auditor starts re-prompting weekly, click **Publish app**
+       on the consent screen.
+  4. **APIs & Services → Credentials → Create Credentials → OAuth
+     client ID**
+     - Application type: **Desktop app**
+     - Download the JSON, rename it to `credentials.json`, put it in the
+       directory you run the auditor from.
+
+`credentials.json` is **you create this** (gitignored, never commit);
+`token.json` is created on first run (also gitignored). Delete
+`token.json` if you change scopes — the tool also detects a cached token
+missing a required scope and re-runs consent itself.
+
+## Installation
+
+This project is **not on PyPI** — install it from source:
 
 ```bash
-pip install -e .          # installs the package + the `gas-audit` command
-gas-audit                 # -> gas_audit.csv in the current directory
+git clone https://github.com/enonymous1/gas-auditor.git
+cd gas-auditor
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -e .                 # installs `gas-audit`, `gas-audit-web`,
+                                 # `gas-audit-export`
+pip install -e ".[web]"          # adds Flask + Markdown for the dashboard
 ```
 
-Without installing:
+Verify:
 
 ```bash
-pip install -r requirements.txt
+gas-audit --help
+gas-audit-web --help
+gas-audit-export --help
+```
+
+Without installing (core only, no dashboard):
+
+```bash
+pip install -r requirements.txt  # core deps; the web extra is NOT in here
 PYTHONPATH=src python -m gas_auditor
 ```
 
-The first run opens a browser for consent and writes `token.json`.
-Later runs reuse/refresh it silently; delete `token.json` if you change
-scopes. `credentials.json` is **you create this** (gitignored, never
-commit); `token.json` is created on first run (also gitignored).
+## Quick start
 
 ```bash
-gas-audit-web               # Flask dashboard: http://127.0.0.1:5001
-gas-audit-export            # bulk source archive (see below)
+gas-audit                 # -> gas_audit.csv in the current directory
+gas-audit-web             # Flask dashboard: http://127.0.0.1:5001
+gas-audit-export          # bulk source archive (see below)
 ```
+
+The first run opens a browser for consent and writes `token.json`.
+Later runs reuse/refresh it silently.
+
+<!-- VISUAL 2 — demo GIF. Record ~30-45s against a throwaway account:
+click Scan Workspace, polling indicator, results table landing, one
+project detail modal, one scope chip, CSV download. Save as
+docs/demo.gif, then uncomment:
+![gas-auditor demo: scan, browse, inspect, export](docs/demo.gif) -->
 
 ## What you get
 
@@ -121,6 +183,12 @@ flowchart TD
     D --> F[Source export<br/>optional]
 ```
 
+One shared pipeline runs every scan: `pipeline.run_scan()` (authenticate
+→ load tracking state → build seed IDs → discover → audit each project
+→ optional GitHub enrichment → update tracking → write script-IDs
+file). The CLI and the dashboard are thin shells around it, so a
+dashboard scan and a CLI run can never disagree about what a scan means.
+
 ## Choose your surface
 
 | Surface | When to use it |
@@ -129,35 +197,6 @@ flowchart TD
 | `gas-audit-web` (Flask dashboard) | Browsing, project detail pages, clickable scope definitions |
 | `apps-script/` (Apps Script-native) | No local install, runs as the viewer, Workspace-org demo |
 | `gas-audit-export` | A local source archive of everything, bound projects included |
-
-<details>
-<summary><b>Google Cloud setup (~5 minutes)</b></summary>
-
-1. Go to https://console.cloud.google.com/ and create (or select) a project.
-   This does **not** have to be any Apps Script project's own Cloud project —
-   one auditor project works for everything you own.
-2. **APIs & Services → Library** — enable both:
-   - **Google Drive API**
-   - **Google Apps Script API**
-3. **APIs & Services → OAuth consent screen**
-   - User type: **External** (or **Internal** if this is a Workspace org account
-     and you only need it inside the org).
-   - App name / support email / developer email: anything sensible.
-   - Scopes (add exactly these four):
-     - `https://www.googleapis.com/auth/drive.metadata.readonly`
-     - `https://www.googleapis.com/auth/script.projects.readonly`
-     - `https://www.googleapis.com/auth/script.metrics`
-     - `https://www.googleapis.com/auth/script.processes`
-   - If the app stays in **Testing** status (External): add your own Google
-     account under **Test users**, otherwise Google blocks the consent.
-     Note: Testing-mode refresh tokens expire after 7 days — if the auditor
-     starts re-prompting weekly, click **Publish app** on the consent screen.
-4. **APIs & Services → Credentials → Create Credentials → OAuth client ID**
-   - Application type: **Desktop app**
-   - Download the JSON, rename it to `credentials.json`, put it in the
-     directory you run the auditor from.
-
-</details>
 
 <details>
 <summary><b>CLI reference</b></summary>
@@ -314,6 +353,12 @@ client-side CSV download. Built for personal use now, Workspace-org demo
 later; public distribution is a separate bridge (OAuth verification).
 See `apps-script/README.md` for the file map and deploy steps.
 
+<!-- VISUAL 3 — Apps Script-native dashboard screenshot. Same throwaway
+account rule as Visual 1. Capture the native dashboard's results table
+with the Container-bound projects panel visible, ~1440px wide, as
+docs/gas-dashboard.png, then uncomment:
+![Apps Script-native dashboard with container-bound seed panel](docs/gas-dashboard.png) -->
+
 </details>
 
 <details>
@@ -388,6 +433,20 @@ stay as list columns and `file_counts_by_type` / `process_types` /
 `process_statuses` stay as structs; in the CSV they are flattened to
 `; `-joined text.
 
+For a whole scan (discovery + tracking + enrichment), prefer the shared
+pipeline over hand-rolling the loop above:
+
+```python
+from pathlib import Path
+from gas_auditor.pipeline import ScanOptions, run_scan
+
+rows = run_scan(ScanOptions(
+    credentials_path=Path("credentials.json"),
+    token_path=Path("token.json"),
+    state_path=None,  # no cross-run tracking for a one-off library scan
+))
+```
+
 </details>
 
 <details>
@@ -395,8 +454,8 @@ stay as list columns and `file_counts_by_type` / `process_types` /
 
 ```
 gas-auditor/
-├── pyproject.toml            # installable package, `gas-audit` console script
-├── requirements.txt          # same dependencies, for a plain pip install
+├── pyproject.toml            # installable package, console scripts, ruff config
+├── requirements.txt          # core dependencies, for a plain pip install
 ├── src/gas_auditor/
 │   ├── __init__.py           # public API re-exports
 │   ├── __main__.py           # python -m gas_auditor
@@ -408,8 +467,11 @@ gas-auditor/
 │   ├── metrics.py            # projects.getMetrics
 │   ├── processes.py          # processes.listScriptProcesses (recent executions)
 │   ├── audit.py              # per-project orchestration, per-stage error isolation
+│   ├── pipeline.py           # full scan, shared by CLI + dashboard (single source)
 │   ├── output.py             # CSV export + Polars DataFrame
-│   ├── cli.py                # argparse entry point
+│   ├── cli.py                # argparse entry point (gas-audit)
+│   ├── export_cli.py         # argparse entry point (gas-audit-export)
+│   ├── exporter.py           # per-project source download to local folders
 │   ├── errors.py             # shared one-line error formatting
 │   ├── retry.py              # 429/5xx exponential-backoff wrapper for API calls
 │   ├── tracking.py           # cross-run state: first/last seen, missing detection
@@ -421,19 +483,23 @@ gas-auditor/
 │       ├── readme.py         # GitHub README resolver/renderer for the detail view
 │       ├── scopes.py         # curated OAuth scope definitions + Google docs links
 │       └── app.py            # create_app() Flask factory, routes, entry point
-└── tests/                    # stdlib unittest, fixture payloads = real API shapes
-    ├── fixtures.py           # fake Drive/Script services + sample payloads
-    ├── test_content.py
-    ├── test_metrics_processes.py
-    ├── test_audit_output.py
-    ├── web_fixtures.py
-    ├── test_web_viewmodels.py  # skipped without the web extra
-    ├── test_web_service.py
-    ├── test_web_readme.py
-    ├── test_retry.py
-    ├── test_tracking.py
-    ├── test_web_scopes.py
-    └── test_web_app.py
+├── tests/                    # stdlib unittest, fixture payloads = real API shapes
+│   ├── fixtures.py           # fake Drive/Script services + sample payloads
+│   ├── test_audit_output.py  # audit rows + CSV/DataFrame output
+│   ├── test_content.py
+│   ├── test_discovery.py     # listing + seeded IDs + IDs-file format
+│   ├── test_exporter.py
+│   ├── test_github_link.py
+│   ├── test_metrics_processes.py
+│   ├── test_pipeline.py      # shared pipeline end to end (fake services)
+│   ├── test_retry.py
+│   ├── test_tracking.py
+│   ├── web_fixtures.py
+│   ├── test_web_viewmodels.py  # skipped without the web extra
+│   ├── test_web_service.py
+│   ├── test_web_readme.py
+│   ├── test_web_scopes.py
+│   └── test_web_app.py
 ├── apps-script/              # Apps Script-native version (see its README)
 │   ├── appsscript.json, Config.gs, Api.gs, Audit.gs, Scan.gs, WebApp.gs
 │   └── Index.html, Stylesheet.html, JavaScript.html
@@ -488,13 +554,120 @@ every bound project), making binds enumerable via the container files.
 More moving parts inside production scripts; the seed file achieves the
 same inventory with zero code inside them.
 
-## Tests
-
-Offline, no Google account needed (fixtures mirror the real API payloads):
+## Local Development
 
 ```bash
-PYTHONPATH=src:tests python -m unittest discover -s tests -v
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[web]"     # editable install + dashboard deps
 ```
+
+Run the suites (offline, no Google account needed — fixtures mirror the
+real API payloads):
+
+```bash
+PYTHONPATH=src:tests python -m unittest discover -s tests -v   # Python
+node tests-gas/test_audit.js                                    # Apps Script
+```
+
+Lint (ruff, config in `pyproject.toml` under `[tool.ruff]`; CI runs the
+same command on every push):
+
+```bash
+pip install ruff
+ruff check src tests
+```
+
+Conventions worth knowing before you change code:
+
+- **Add a column, not a special case.** A new audit field means: one entry
+  in `config.AUDIT_FIELDS` (in order), one producer in the relevant
+  `fetch_*` module, and a test with a fixture payload. `output.py`
+  flattens lists/dicts for CSV automatically; `to_dataframe` restricts
+  rows to `AUDIT_FIELDS`, so stray keys can't leak into the schema.
+- **Add a stage, not a branch.** Per-project work goes through
+  `audit.audit_project`'s try/except-per-stage pattern, so a failing
+  stage lands in its `*_error` column instead of aborting the run. New
+  stages also need a `*_error` column in `AUDIT_FIELDS`.
+- **Don't fork the scan.** `pipeline.run_scan()` is the one scan
+  implementation; the CLI and dashboard only differ in how they invoke
+  it and where rows go. If a change belongs in "every scan", it belongs
+  in `pipeline.py`, with a test in `tests/test_pipeline.py` using the
+  `services` injection seam (fake Drive/Script services, no creds).
+- **Keep the core Flask-free.** Nothing under `src/gas_auditor/` except
+  `web/` imports Flask; `web/viewmodels.py` stays pure (no I/O) so
+  display logic is unit-testable without a server.
+- **Docstrings explain why.** Module docstrings state the design reason
+  (quota behaviour, Drive ghosting, per-stage isolation); function
+  docstrings state contracts and edge cases. Keep that ratio — a
+  docstring restating the code adds nothing.
+- **Version in two places, deliberately.** `pyproject.toml` and
+  `gas_auditor/__init__.py::__version__` both say `0.11.0`; bump both
+  together on release (see the single-source suggestion in the review
+  notes if you want to end this duplication).
+
+## Deployment
+
+### Flask dashboard — local tool, not a hosted service
+
+The dashboard ships on Flask's built-in development server, bound to
+`127.0.0.1` by default. That is the intended deployment for a
+single-user inventory tool: run it on your own machine, browse it
+locally, stop it with Ctrl+C. There is **no authentication** in the
+dashboard itself, and no production WSGI configuration has been tested
+for this project — don't invent one at deploy time.
+
+If you need it reachable from another machine, do it behind something
+that authenticates first, not by bare `--host 0.0.0.0`:
+
+- **Preferred:** keep it on localhost and reach it over an SSH tunnel
+  (`ssh -L 5001:localhost:5001 <host>`), so the only credential in play
+  is your SSH login.
+- **Alternative:** put it behind an authenticating reverse proxy
+  (e.g. a proxy that requires your identity provider's login before
+  forwarding to `127.0.0.1:5001`). Anyone who can reach the dashboard
+  unauthenticated can trigger scans and read your full inventory,
+  including OAuth scopes and execution history.
+
+`credentials.json` / `token.json` live wherever you run it from and are
+gitignored; the dashboard shares the CLI's `gas_audit_state.json`
+tracking file when pointed at the same path — don't run a CLI scan and a
+dashboard scan concurrently against the same state file (writes are
+atomic per file, but there is no lock, so the last writer wins).
+
+### Apps Script-native dashboard — deploy with clasp
+
+The `apps-script/` version deploys as a web app running **as the viewing
+user** (deployment access: yourself for now; a Workspace-org demo is the
+next bridge, public distribution needs OAuth verification). Full steps
+are in `apps-script/README.md`; the shape is:
+
+```bash
+npm install -g @google/clasp
+cd apps-script
+clasp login                    # once; also enable the Apps Script API
+                               # toggle at script.google.com/home/usersettings
+clasp create --title "GAS Auditor" --type webapp   # first time only
+clasp push
+clasp deploy --description "v0.1"                 # first deployment
+clasp deploy --deploymentId <id> --description "…" # later updates keep
+                               # the same /exec URL
+```
+
+After a scope or manifest change, reopen the deployed URL and re-authorize.
+Two deployment gotchas already documented in `apps-script/README.md`:
+the manifest pins `script.external_request` (without it, `UrlFetchApp`
+calls fail), and the script's Cloud project needs the Drive API enabled
+(a 403 naming the script's project means exactly that — enable it via
+the console link in the error, or switch the script to a standard GCP
+project where it's already on).
+
+### Release checklist (for the maintainer)
+
+1. Bump the version in **both** `pyproject.toml` and
+   `gas_auditor/__init__.py::__version__`.
+2. `ruff check src tests` clean; full Python + GAS suites green.
+3. Tag (`vX.Y.Z`) and push; the CI badge goes live once the repo exists
+   and CI has run on `main`.
 
 ## Known limits
 
@@ -506,3 +679,7 @@ PYTHONPATH=src:tests python -m unittest discover -s tests -v
   `total_executions` / `failed_executions` *are* summed across intervals.
 - Projects you can view but whose owner hasn't enabled API access, deleted
   projects, etc. land in the row's `*_error` columns instead of aborting the run.
+- The audit is sequential (one project at a time, 4 API calls each).
+  Large estates take minutes; the retry wrapper absorbs the quota pauses.
+  A concurrent mode is a deliberate future change, not a quick flag —
+  see the review notes.
