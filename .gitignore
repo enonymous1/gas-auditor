@@ -3,6 +3,8 @@ token.json
 gas_audit_state.json
 # Exported project source (gas-audit-export) -- code may embed secrets.
 gapps-projects/
+# Static demo site (scripts/freeze.py) -- built in CI for Pages, never committed.
+freeze-site/
 *.csv
 __pycache__/
 .venv/

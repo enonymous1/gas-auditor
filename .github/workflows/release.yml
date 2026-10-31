@@ -1,0 +1,77 @@
+name: Release
+
+# Tag-triggered: pushing a tag like v0.11.0 (or v0.12.0-rc.1 for a
+# pre-release -- anything with a "-" suffix) builds and publishes a
+# GitHub Release. Tag pushes do NOT trigger ci.yml (that workflow runs
+# on pushes to main and pull requests), so this workflow runs the tests
+# and the lint gate itself before publishing anything.
+#
+# Order matters: tag AFTER the commit you want released is on main, so
+# the tagged commit contains this workflow:
+#   git push origin main && git tag vX.Y.Z && git push origin vX.Y.Z
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package with web extra + build tool
+        run: pip install -e ".[web]" build ruff==0.17.3
+      - name: Lint (ruff, pinned -- see pyproject [tool.ruff])
+        run: ruff check src tests scripts
+      - name: Python tests (offline, fixture-backed)
+        run: PYTHONPATH=src:tests python -m unittest discover -s tests -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Apps Script (Node) tests
+        run: node tests-gas/test_audit.js
+      - name: Check tag matches the declared version
+        # The version lives in two places (pyproject.toml and
+        # gas_auditor/__init__.py::__version__) and they must agree
+        # with each other AND with the tag -- a release cut from a
+        # commit that forgot the bump fails here instead of shipping
+        # a wheel whose version disagrees with its tag.
+        run: |
+          python - <<'EOF'
+          import os, re, sys, tomllib
+          from pathlib import Path
+          tag = os.environ["GITHUB_REF_NAME"]
+          assert tag.startswith("v"), tag
+          version = tag[1:]
+          with open("pyproject.toml", "rb") as fh:
+              declared = tomllib.load(fh)["project"]["version"]
+          init = Path("src/gas_auditor/__init__.py").read_text()
+          code_version = re.search(r'__version__ = "([^"]+)"', init).group(1)
+          if declared != version or code_version != version:
+              sys.exit(
+                  f"Version mismatch: tag={version} pyproject={declared} "
+                  f"__init__={code_version}. Bump both files, commit, "
+                  "then tag again."
+              )
+          print(f"Version OK: {version}")
+          EOF
+      - name: Build wheel + sdist
+        run: python -m build
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          # Tags with a "-" suffix (v0.12.0-rc.1) ship as pre-releases.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true

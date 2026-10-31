@@ -607,6 +607,35 @@ Conventions worth knowing before you change code:
 
 ## Deployment
 
+### Live demo (GitHub Pages, static freeze)
+
+A browsable demo of the dashboard is published to GitHub Pages from
+seeded demo data — no real account, no credentials involved:
+
+- **Site:** https://enonymous1.github.io/gas-auditor/ (live once the
+  repo exists, the Pages workflow has run, and Pages is pointed at
+  GitHub Actions — see the one-time step below).
+- **How it's built:** `scripts/freeze.py` boots the real Flask app with
+  a ScanService pre-loaded with six invented projects, renders every
+  page through Flask's test client (the same Jinja templates the live
+  dashboard serves), and writes static HTML with relative links, so it
+  works under the `/gas-auditor/` project subpath. Run it locally to
+  preview: `python scripts/freeze.py --output freeze-site`, then open
+  `freeze-site/index.html`. The script takes no credentials/state
+  arguments at all, so real account data cannot be frozen by accident.
+- **What works frozen:** inventory table → project detail pages →
+  pre-rendered scope definitions page, the theme toggle (localStorage +
+  CSS only), and the CSV / script-IDs downloads as pre-generated files.
+- **What doesn't:** Scan is disabled (the button says so — it must not
+  pretend to scan), scope definitions open as a page instead of a
+  modal, and README previews become a static note. Every page carries a
+  "Static demo" banner saying exactly this.
+- **Workflow:** `.github/workflows/pages.yml` runs on every push to
+  `main` (and on demand): install, freeze, upload, deploy. One-time
+  setup after the repo exists: Settings → Pages → Build and
+  deployment → Source: **GitHub Actions**.
+- `freeze-site/` is gitignored — it is built in CI, never committed.
+
 ### Flask dashboard — local tool, not a hosted service
 
 The dashboard ships on Flask's built-in development server, bound to
@@ -663,11 +692,22 @@ project where it's already on).
 
 ### Release checklist (for the maintainer)
 
+Releases are tag-triggered (`.github/workflows/release.yml`):
+
 1. Bump the version in **both** `pyproject.toml` and
    `gas_auditor/__init__.py::__version__`.
-2. `ruff check src tests` clean; full Python + GAS suites green.
-3. Tag (`vX.Y.Z`) and push; the CI badge goes live once the repo exists
-   and CI has run on `main`.
+2. `ruff check src tests scripts` clean; full Python + GAS suites green.
+3. Push `main` first, **then** tag, so the tagged commit contains the
+   workflow itself:
+   `git push origin main && git tag vX.Y.Z && git push origin vX.Y.Z`
+   (for a pre-release, tag `vX.Y.Z-rc.1` — anything with a `-` suffix
+   ships as a pre-release).
+4. The workflow re-runs lint + both suites, verifies the tag matches
+   both version declarations (a forgotten bump fails the run instead
+   of shipping a mismatched wheel), builds the wheel + sdist, writes
+   `SHA256SUMS.txt`, and publishes a GitHub Release with generated
+   notes. Tag pushes don't trigger `ci.yml`, which is why the release
+   job runs the gates itself.
 
 ## Known limits
 

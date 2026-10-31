@@ -1,0 +1,47 @@
+name: Pages demo
+
+# Builds the static demo site (scripts/freeze.py -- seeded demo data,
+# no credentials) and deploys it to GitHub Pages on every push to main
+# (and on demand). One-time setup after the repo exists: Settings ->
+# Pages -> Build and deployment -> Source: GitHub Actions. The site then
+# lives at https://enonymous1.github.io/gas-auditor/
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package with web extra
+        run: pip install -e ".[web]"
+      - name: Render the frozen demo site
+        run: python scripts/freeze.py --output freeze-site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: freeze-site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment

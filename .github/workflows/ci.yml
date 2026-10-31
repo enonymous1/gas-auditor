@@ -21,7 +21,7 @@ jobs:
       - name: Lint (ruff, pinned -- see pyproject [tool.ruff])
         run: |
           pip install ruff==0.17.3
-          ruff check src tests
+          ruff check src tests scripts
       - name: Python tests (offline, fixture-backed)
         run: PYTHONPATH=src:tests python -m unittest discover -s tests -v
 
